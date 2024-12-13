@@ -29,7 +29,7 @@ const whatsappClient = new Client({
 async function pairWithCode() {
     try {
         // Ganti dengan nomor telepon Anda (format: countrycode+number)
-        const phoneNumber = "6287716241872"; // Contoh: 628123456789
+        const phoneNumber = "2"; // Contoh: 628123456789
         const code = await whatsappClient.requestPairingCode(phoneNumber);
         console.log(`Pairing code: ${code}`);
         console.log("Masukkan kode ini di WhatsApp mobile Anda");
