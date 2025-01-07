@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import axios from "axios";
-import { Client, Message, MessageMedia } from "whatsapp-web.js";
+import { Client, LocalAuth, Message, MessageMedia } from "whatsapp-web.js";
+import qrcode from "qrcode-terminal";
 import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 import 'dotenv/config';
 
@@ -18,98 +19,94 @@ async function mediaToGenerativePart(media: MessageMedia) {
   };
 }
 
-// Konfigurasi WhatsApp client dengan pairing code
 const whatsappClient = new Client({
-    puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    }
+  authStrategy: new LocalAuth(),
+  puppeteer: {
+    args: ['--no-sandbox', '--disable-setuid-sandbox'], 
+  },
 });
 
-// Fungsi untuk melakukan pairing dengan kode
-async function pairWithCode() {
-    try {
-        // Ganti dengan nomor telepon Anda (format: countrycode+number)
-        const phoneNumber = "2"; // Contoh: 628123456789
-        const code = await whatsappClient.requestPairingCode(phoneNumber);
-        console.log(`Pairing code: ${code}`);
-        console.log("Masukkan kode ini di WhatsApp mobile Anda");
-    } catch (error) {
-        console.error("Error saat meminta pairing code:", error);
-    }
-}
+whatsappClient.on("qr", (qr: string) => {
+  qrcode.generate(qr, { small: true });
+  console.log("QR Code received, scan with your phone.");
+});
 
 whatsappClient.on("ready", () => {
-    console.log("WhatsApp Web client is ready!");
+  console.log("WhatsApp Web client is ready!");
 });
 
 whatsappClient.on("message", async (msg: Message) => {
-    const senderNumber: string = msg.from;
-    const message: string = msg.body;
+  const senderNumber: string = msg.from;
+  const message: string = msg.body;
 
-    console.log(`Received message from ${senderNumber}: ${message}`);
+  console.log(`Received message from ${senderNumber}: ${message}`);
 
-    let mediaPart = null;
+  // Filter pesan yang diawali dengan "#devin"
+  if (!message.startsWith("#devin")) {
+    console.log(`Ignored message from ${senderNumber} because it doesn't start with #devin.`);
+    return;
+  }
 
-    if (msg.hasMedia) {
-        const media = await msg.downloadMedia();
-        mediaPart = await mediaToGenerativePart(media);
-    }
+  // Hapus prefix "#devin" sebelum diproses
+  const cleanedMessage = message.replace("#devin", "").trim();
+  let mediaPart = null;
 
-    await run(message, senderNumber, mediaPart);
+  if (msg.hasMedia) {
+    const media = await msg.downloadMedia();
+    mediaPart = await mediaToGenerativePart(media);
+  }
+
+  await run(cleanedMessage, senderNumber, mediaPart);
 });
 
-// Inisialisasi client dan mulai proses pairing
-whatsappClient.initialize().then(() => {
-    pairWithCode();
-}).catch(err => {
-    console.error("Error during initialization:", err);
-});
+whatsappClient.initialize();
 
 let chat: ChatSession | null = null;
 
 async function run(message: string, senderNumber: string, mediaPart?: any): Promise<void> {
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        if (!chat) {
-            chat = model.startChat({
-                generationConfig: {
-                    maxOutputTokens: 500,
-                },
-            });
-        }
-        let prompt: any[] = [];
-
-        prompt.push(message);
-
-        if (mediaPart) {
-            prompt.push(mediaPart);
-        }
-        
-        const result = await chat.sendMessage(prompt);
-        const response = await result.response;
-        const text: string = response.text();
-
-        if (text) {
-            console.log("Generated Text:", text);
-            await sendWhatsAppMessage(text, senderNumber);
-        } else {
-            console.error("This problem is related to Model Limitations and API Rate Limits");
-        }
-
-    } catch (error) {
-        console.error("Error in run function:", error);
-        await sendWhatsAppMessage("Oops, an error occurred. Please try again later.", senderNumber);
+    if (!chat) {
+      chat = model.startChat({
+        generationConfig: {
+          maxOutputTokens: 500,
+        },
+      });
     }
+    let prompt: any[] = [];
+
+    prompt.push(message);
+
+    if (mediaPart) {
+      prompt.push(mediaPart);
+    }
+    
+    const result = await chat.sendMessage(prompt);
+    const response = await result.response;
+    const text: string = response.text();
+
+
+    if (text) {
+      console.log("Generated Text:", text);
+      await sendWhatsAppMessage(text, senderNumber);
+    } else {
+      console.error("This problem is related to Model Limitations and API Rate Limits");
+    }
+
+  } catch (error) {
+    console.error("Error in run function:", error);
+    await sendWhatsAppMessage("Oops, an error occurred. Please try again later.", senderNumber);
+  }
 }
 
 async function sendWhatsAppMessage(text: string, toNumber: string): Promise<void> {
-    try {
-        await whatsappClient.sendMessage(toNumber, text);
-    } catch (err) {
-        console.error("Failed to send WhatsApp message:");
-        console.error("Error details:", err);
-    }
+  try {
+    await whatsappClient.sendMessage(toNumber, text);
+  } catch (err) {
+    console.error("Failed to send WhatsApp message:");
+    console.error("Error details:", err);
+  }
 }
 
 app.listen(port, () => console.log(`Express app running on port ${port}!`));
