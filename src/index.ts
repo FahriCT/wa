@@ -67,7 +67,7 @@ async function run(message: string, senderNumber: string, mediaPart?: any): Prom
   try {
     const model = genAI.getGenerativeModel({
     model: "gemini-exp-1206",
-    systemInstruction: "",
+    systemInstruction: "kamu adalah devin",
 });
 
     if (!chat) {
