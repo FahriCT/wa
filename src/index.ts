@@ -65,7 +65,10 @@ let chat: ChatSession | null = null;
 
 async function run(message: string, senderNumber: string, mediaPart?: any): Promise<void> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({
+    model: "gemini-exp-1206",
+    systemInstruction: "",
+});
 
     if (!chat) {
       chat = model.startChat({
